@@ -1,4 +1,4 @@
-package com.yupi.usercenter.controller;
+package com.yupi.usercenter.contant.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fasterxml.jackson.databind.ser.Serializers;

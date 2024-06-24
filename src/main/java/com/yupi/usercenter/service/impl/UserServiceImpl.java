@@ -2,6 +2,8 @@ package com.yupi.usercenter.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.yupi.usercenter.common.ErrorCode;
 import com.yupi.usercenter.exception.BusinessException;
 import com.yupi.usercenter.model.domain.User;
@@ -10,12 +12,18 @@ import com.yupi.usercenter.mapper.UserMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.DigestUtils;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static com.yupi.usercenter.contant.UserConstant.USER_LOGIN_STATE;
 
@@ -172,6 +180,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         safetyUser.setUserRole(originUser.getUserRole());
         safetyUser.setUserStatus(originUser.getUserStatus());
         safetyUser.setCreateTime(originUser.getCreateTime());
+        safetyUser.setTags(originUser.getTags());
         return safetyUser;
     }
 
@@ -187,6 +196,56 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         return 1;
     }
 
+
+    /**
+     * 根据标签搜索用户
+     * @param tagNameList
+     * @return
+     */
+    @Override
+    public List<User> searchUserByTags(List<String> tagNameList){
+    if(CollectionUtils.isEmpty(tagNameList)){
+        throw new BusinessException(ErrorCode.PARAMS_ERROR);
+    }
+    //sql查询
+//    QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+//    for (String tagList : tagNameList) {
+//        queryWrapper = queryWrapper.like("tags", tagList);
+//    }
+//    List<User> userList = userMapper.selectList(queryWrapper);
+
+
+
+        //内存查询
+    QueryWrapper<User> queryWrapper = new QueryWrapper();
+    List<User> userList = userMapper.selectList(queryWrapper);
+    Gson gson =new Gson();
+    //在内存中判断是否包含要求的标签，非常灵活
+        return userList.stream().filter(user -> {
+            String tagstr = user.getTags();
+            if (StringUtils.isBlank(tagstr)){
+                return false;
+            }
+            Set<String> tempTagNameSet =  gson.fromJson(tagstr,new TypeToken<Set<String>>(){}.getType());
+            //java8
+           // tempTagNameSet = Optional.ofNullable(tempTagNameSet).orElse(new HashSet<>());
+            for (String tagName : tagNameList){
+                if (!tempTagNameSet.contains(tagName)){
+                    return false;
+                }
+            }
+            return true;
+        }).map(this::getSafetyUser).collect(Collectors.toList());
+    }
+
+
+
+
+
 }
+
+
+
+
 
 // [加入我们](https://yupi.icu) 从 0 到 1 项目实战，经验拉满！10+ 原创项目手把手教程、7 日项目提升训练营、1000+ 项目经验笔记、60+ 编程经验分享直播

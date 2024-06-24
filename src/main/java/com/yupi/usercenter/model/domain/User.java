@@ -87,6 +87,11 @@ public class User implements Serializable {
      */
     private String planetCode;
 
+    /**
+     * 标签列表
+     */
+    private String tags;
+
     // https://github.com/liyupi
 
     @TableField(exist = false)

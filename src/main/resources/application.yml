@@ -3,13 +3,14 @@
 # @from <a href="https://yupi.icu">编程导航知识星球</a>
 spring:
   application:
-    name: user-center-backend
+    name: yupao-backend
   # DataSource Config
   datasource:
-    driver-class-name: com.mysql.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/yupi
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://212.64.22.193:3306/team?autoReconnect=true&characterEncoding =UTF-8&zeroDateTimeBehavior=CONVERT_TO_NULL&connectionTimeZone=Asia/Shanghai&allowMultiQueries=true&maxRows=1000&createDatabaseIfNotExist=false
+
     username: root
-    password: 123456
+    password: UNLOCK110
   # session 失效时间
   session:
     timeout: 86400
@@ -20,6 +21,7 @@ server:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: false
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
   global-config:
     db-config:
       logic-delete-field: isDelete # 全局逻辑删除的实体字段名(since 3.3.0,配置后可以忽略不配置步骤2)
