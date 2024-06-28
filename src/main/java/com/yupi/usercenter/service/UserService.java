@@ -6,6 +6,9 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
+import static com.yupi.usercenter.contant.UserConstant.ADMIN_ROLE;
+import static com.yupi.usercenter.contant.UserConstant.USER_LOGIN_STATE;
+
 /**
  * 用户服务
  *
@@ -44,6 +47,28 @@ public interface UserService extends IService<User> {
     User getSafetyUser(User originUser);
 
     // [加入编程导航](https://t.zsxq.com/0emozsIJh) 深耕编程提升【两年半】、国内净值【最高】的编程社群、用心服务【20000+】求学者、帮你自学编程【不走弯路】
+
+    /**
+     * 用户更新
+     */
+    Integer userUpdate(User user, User loginUser);
+
+
+    /**
+     * 是否为管理员
+     *
+     * @param request
+     * @return
+     */
+    boolean isAdmin(HttpServletRequest request);
+    boolean isAdmin(User loginUser);
+
+
+
+    /**
+     * 获取当前用户信息
+     */
+    User getLoginUser(HttpServletRequest request);
 
     /**
      * 用户注销

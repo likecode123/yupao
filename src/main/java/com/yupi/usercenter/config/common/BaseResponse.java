@@ -1,4 +1,4 @@
-package com.yupi.usercenter.common;
+package com.yupi.usercenter.config.common;
 
 import lombok.Data;
 

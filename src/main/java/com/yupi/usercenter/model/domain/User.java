@@ -15,11 +15,14 @@ import java.util.Date;
 @TableName(value = "user")
 @Data
 public class User implements Serializable {
+    //序列化id
+//    private static final long serialVersionUID =    1L ;
+
     /**
      * id
      */
     @TableId(type = IdType.AUTO)
-    private Long id;
+    private long id;
 
     /**
      * 用户昵称

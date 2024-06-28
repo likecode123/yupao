@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import com.yupi.usercenter.common.ErrorCode;
+import com.yupi.usercenter.config.common.ErrorCode;
 import com.yupi.usercenter.exception.BusinessException;
 import com.yupi.usercenter.model.domain.User;
 import com.yupi.usercenter.service.UserService;
@@ -17,16 +17,16 @@ import org.springframework.util.DigestUtils;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static com.yupi.usercenter.contant.UserConstant.ADMIN_ROLE;
 import static com.yupi.usercenter.contant.UserConstant.USER_LOGIN_STATE;
 
+//通用的  可能会被多次调用的写在service里
 /**
  * 用户服务实现类
  *
@@ -184,6 +184,77 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         return safetyUser;
     }
 
+    @Override
+    public Integer userUpdate(User user,User loginUser) {
+        //业务逻辑写在了service，只有管理员和自己可以修改
+//        如果是管理员，都可以修改
+        long userId = user.getId();
+        if (userId <= 0){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        if (isAdmin(loginUser)) {
+
+            User oldUser = userMapper.selectById(userId);
+            if (oldUser == null) {
+                throw new BusinessException(ErrorCode.NULL_ERROR);
+            }
+//            i基本上就是0条或者一条
+            return userMapper.updateById(user);
+        }
+//        如果是用户自己   只能修改自己的信息
+        if (userId != loginUser.getId()){
+            throw new BusinessException(ErrorCode.NO_AUTH);
+        }
+
+
+        return userMapper.updateById(user);
+    }
+
+    /**
+     * 是否为管理员
+     *
+     * @param request
+     * @return
+     */
+    @Override
+    public boolean isAdmin(HttpServletRequest request) {
+        // 仅管理员可查询
+        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
+        User user = (User) userObj;
+        return user != null && user.getUserRole() == ADMIN_ROLE;
+    }
+
+    /**
+     * 是否为管理员
+     *
+     * @param loginUser
+     * @return
+     */
+    @Override
+    public boolean isAdmin(User loginUser) {
+
+
+        return loginUser != null && loginUser.getUserRole() == ADMIN_ROLE;
+    }
+
+
+
+    @Override
+    public User getLoginUser(HttpServletRequest request) {
+        if (request == null){
+            return null;
+        }
+        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
+
+
+
+        if (userObj == null){
+            throw  new  BusinessException(ErrorCode.NO_AUTH);
+        }
+        return (User)userObj;
+
+    }
+
     /**
      * 用户注销
      *
@@ -237,10 +308,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             return true;
         }).map(this::getSafetyUser).collect(Collectors.toList());
     }
-
-
-
-
 
 }
 

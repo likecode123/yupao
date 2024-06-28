@@ -1,10 +1,10 @@
 package com.yupi.usercenter.contant.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.fasterxml.jackson.databind.ser.Serializers;
-import com.yupi.usercenter.common.BaseResponse;
-import com.yupi.usercenter.common.ErrorCode;
-import com.yupi.usercenter.common.ResultUtils;
+import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
+import com.yupi.usercenter.config.common.BaseResponse;
+import com.yupi.usercenter.config.common.ErrorCode;
+import com.yupi.usercenter.config.common.ResultUtils;
 import com.yupi.usercenter.exception.BusinessException;
 import com.yupi.usercenter.model.domain.User;
 import com.yupi.usercenter.model.domain.request.UserLoginRequest;
@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -30,10 +29,12 @@ import static com.yupi.usercenter.contant.UserConstant.USER_LOGIN_STATE;
  */
 @RestController
 @RequestMapping("/user")
+@CrossOrigin(origins = "http://localhost:5173",allowCredentials = "true")
 public class UserController {
 
     @Resource
     private UserService userService;
+
 
     /**
      * 用户注册
@@ -118,7 +119,7 @@ public class UserController {
 
     @GetMapping("/search")
     public BaseResponse<List<User>> searchUsers(String username, HttpServletRequest request) {
-        if (!isAdmin(request)) {
+        if (!userService.isAdmin(request)) {
             throw new BusinessException(ErrorCode.NO_AUTH, "缺少管理员权限");
         }
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
@@ -132,7 +133,7 @@ public class UserController {
 
     @PostMapping("/delete")
     public BaseResponse<Boolean> deleteUser(@RequestBody long id, HttpServletRequest request) {
-        if (!isAdmin(request)) {
+        if (!userService.isAdmin(request)) {
             throw new BusinessException(ErrorCode.NO_AUTH);
         }
         if (id <= 0) {
@@ -142,19 +143,33 @@ public class UserController {
         return ResultUtils.success(b);
     }
 
+    @PostMapping("/update")
+    public BaseResponse<Integer> updateUser(@RequestBody User user, HttpServletRequest request) {
+//      //1 校验参数是否为空
+        if (user == null){
+            throw  new  BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+
+//      //2 校验权限
+//      //3 触发更新  这两个写在业务类
+        Integer result = userService.userUpdate(user,loginUser);
+        return ResultUtils.success(result);
+    }
     // [鱼皮的学习圈](https://yupi.icu) 从 0 到 1 求职指导，斩获 offer！1 对 1 简历优化服务、2000+ 求职面试经验分享、200+ 真实简历和建议参考、25w 字前后端精选面试题
 
-    /**
-     * 是否为管理员
-     *
-     * @param request
-     * @return
-     */
-    private boolean isAdmin(HttpServletRequest request) {
-        // 仅管理员可查询
-        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
-        User user = (User) userObj;
-        return user != null && user.getUserRole() == ADMIN_ROLE;
+
+
+
+    @GetMapping("/search/tags")
+    public BaseResponse<List<User>> searchTags(@RequestParam(required = false) List<String> tagNameList){
+        if(CollectionUtils.isEmpty(tagNameList)){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+
+        List<User> users = (List<User>) userService.searchUserByTags(tagNameList);
+        return  ResultUtils.success(users);
     }
+
 
 }
