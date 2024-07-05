@@ -54,7 +54,7 @@
             <version>2.7.0</version>
         </dependency>
 
-        <!-- 自动将session添加到redis中   -->
+<!--         自动将session添加到redis中   -->
         <dependency>
             <groupId>org.springframework.session</groupId>
             <artifactId>spring-session-data-redis</artifactId>

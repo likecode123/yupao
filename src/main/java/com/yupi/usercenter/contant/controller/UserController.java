@@ -2,23 +2,27 @@ package com.yupi.usercenter.contant.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yupi.usercenter.config.common.BaseResponse;
 import com.yupi.usercenter.config.common.ErrorCode;
 import com.yupi.usercenter.config.common.ResultUtils;
 import com.yupi.usercenter.exception.BusinessException;
 import com.yupi.usercenter.model.domain.User;
-import com.yupi.usercenter.model.domain.request.UserLoginRequest;
-import com.yupi.usercenter.model.domain.request.UserRegisterRequest;
+import com.yupi.usercenter.model.request.UserLoginRequest;
+import com.yupi.usercenter.model.request.UserRegisterRequest;
 import com.yupi.usercenter.service.UserService;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static com.yupi.usercenter.contant.UserConstant.ADMIN_ROLE;
 import static com.yupi.usercenter.contant.UserConstant.USER_LOGIN_STATE;
 
 /**
@@ -30,10 +34,15 @@ import static com.yupi.usercenter.contant.UserConstant.USER_LOGIN_STATE;
 @RestController
 @RequestMapping("/user")
 @CrossOrigin(origins = "http://localhost:5173",allowCredentials = "true")
+@Slf4j
 public class UserController {
 
     @Resource
     private UserService userService;
+    @Resource
+    private RedisTemplate<String,Object> redisTemplate;
+
+
 
 
     /**
@@ -130,6 +139,41 @@ public class UserController {
         List<User> list = userList.stream().map(user -> userService.getSafetyUser(user)).collect(Collectors.toList());
         return ResultUtils.success(list);
     }
+
+    /**
+     * 主页推荐用户接口
+     * @param request
+     * @return
+     */
+    @GetMapping("/recommend")
+    public BaseResponse<Page<User>> recommendUsers(long pageSize,long pageNum,
+                                                   HttpServletRequest request){
+        User loginUser = userService.getLoginUser(request);
+        String redisKey = String.format("yupao:user:recommend:%s",loginUser.getId());
+        ValueOperations<String,Object> valueOperations = redisTemplate.opsForValue();
+//如果有缓存，直接从缓存中读取
+        Page<User> userPage = (Page<User>)valueOperations.get(redisKey);
+        if (userPage != null){
+            return ResultUtils.success(userPage);
+        }
+//如果没有缓存就从数据库中读取
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        userPage = userService.page(new Page<>(pageNum, pageSize), queryWrapper);
+//从数据库读取数据后，再写入缓存，记得写缓存过期时间
+        try {
+            valueOperations.set(redisKey,userPage,300000, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            log.error("redis set key error",e);
+        }
+        return ResultUtils.success(userPage);
+    }
+
+
+
+
+//        List<User> userList = userService.list(queryWrapper);
+//        List<User> list = userList.stream().map(user -> userService.getSafetyUser(user)).collect(Collectors.toList());
+
 
     @PostMapping("/delete")
     public BaseResponse<Boolean> deleteUser(@RequestBody long id, HttpServletRequest request) {
