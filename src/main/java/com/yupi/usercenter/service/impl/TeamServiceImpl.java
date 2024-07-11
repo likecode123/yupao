@@ -4,9 +4,7 @@ package com.yupi.usercenter.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.yupi.usercenter.config.common.BaseResponse;
 import com.yupi.usercenter.config.common.ErrorCode;
-import com.yupi.usercenter.config.common.ResultUtils;
 import com.yupi.usercenter.exception.BusinessException;
 import com.yupi.usercenter.mapper.TeamMapper;
 import com.yupi.usercenter.model.domain.Team;
@@ -22,7 +20,6 @@ import com.yupi.usercenter.model.vo.UserVO;
 import com.yupi.usercenter.service.TeamService;
 import com.yupi.usercenter.service.UserService;
 import com.yupi.usercenter.service.UserTeamService;
-import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -133,11 +130,11 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
             if (id != null && id > 0) {
                 queryWrapper.eq("id", id);
             }
-            //因为上面是拿的鱼皮的vo,所以这里需要添加
-//                List<Long> idList = teamQuery.getIdList();
-//                if (CollectionUtils.isNotEmpty(idList)) {
-//                    queryWrapper.in("id", idList);
-//                }
+            //增加List
+            List<Long> idList = teamQuery.getIdList();
+            if (CollectionUtils.isNotEmpty(idList)){
+                queryWrapper.in("id",idList);
+            }
             String searchText = teamQuery.getSearchText();
             if (StringUtils.isNotBlank(searchText)) {
                 queryWrapper.and(qw -> qw.like("name", searchText).or().like("description", searchText));
@@ -252,14 +249,18 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
 
         //如果加入的队伍是加密的，必须密码匹配才可以
         Integer status = team.getStatus();
-        if (TeamStatusEnum.getEnumByValue(status) == TeamStatusEnum.PRIVATE) {
+        TeamStatusEnum statusEnum =TeamStatusEnum.getEnumByValue(status);
+        if (statusEnum == TeamStatusEnum.PRIVATE) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "禁止加入私有队伍");
         }
 
         String password = teamJoinRequest.getPassword();
-        if (StringUtils.isBlank(password) || !password.equals(team.getPassword())) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "密码错误");
+        if (TeamStatusEnum.SECRET == statusEnum){
+            if (StringUtils.isBlank(password) || !password.equals(team.getPassword())) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "密码错误");
+            }
         }
+
 
 
         //把需要数据库查询的放在后面 提高性能。查询该用户加入的队伍数量
@@ -280,7 +281,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
         long unionCount = userTeamService.count(queryWrapper);
         //这里应该是大于0   临界值
         if (unionCount > 0) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "队伍已满");
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "重复加入");
         }
 
 
@@ -305,6 +306,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Boolean quitTeam(TeamQuitRequest teamQuitRequest, User loginUser) {
         Long teamId = teamQuitRequest.getTeamId();
         if (teamId == null || teamId <= 0) {
@@ -365,6 +367,37 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
 
         return userTeamService.remove(queryWrapper);
 
+
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Boolean deleteTeam(long id, User loginUser) {
+        // 1. 校验 team 是否存在
+        Team team = this.getById(id);
+        if (team == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"队伍不存在");
+        }
+        long teamId=team.getId();
+        // 2. 校验是否是队长
+        if (!team.getUserId().equals(loginUser.getId())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"非队长无权限删除队伍");
+        }
+        // 3. 删除 team 对应的所有 team_user
+        QueryWrapper<UserTeam> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("teamId", teamId);
+        boolean result = userTeamService.remove(queryWrapper);
+        if (!result) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "删除 team 失败");
+        }
+        // 4. 删除 team
+        QueryWrapper<Team> postQueryWrapper = new QueryWrapper<>();
+        postQueryWrapper.eq("id", teamId);
+        boolean postResult = this.remove(postQueryWrapper);
+        if (!postResult) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "删除 team 失败");
+        }
+        return true;
 
     }
 }

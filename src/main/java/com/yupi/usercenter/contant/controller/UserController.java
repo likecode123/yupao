@@ -10,6 +10,7 @@ import com.yupi.usercenter.exception.BusinessException;
 import com.yupi.usercenter.model.domain.User;
 import com.yupi.usercenter.model.request.UserLoginRequest;
 import com.yupi.usercenter.model.request.UserRegisterRequest;
+import com.yupi.usercenter.model.vo.UserVO;
 import com.yupi.usercenter.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -215,5 +216,21 @@ public class UserController {
         return  ResultUtils.success(users);
     }
 
+    /**
+     * 匹配用户
+     * @param num 匹配出的数量
+     * @param request
+     * @return
+     */
+    @GetMapping("/match")
+    public BaseResponse<List<User>> matchUsers(long num, HttpServletRequest request){
+        //涉及查数据库  额外注意
+        if(num <= 0||num>20){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"匹配数量不合适");
+        }
 
+        User loginUser = userService.getLoginUser(request);
+
+        return ResultUtils.success(userService.matchUsers(num,loginUser));
+    }
 }

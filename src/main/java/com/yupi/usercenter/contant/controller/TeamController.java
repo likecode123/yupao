@@ -9,20 +9,26 @@ import com.yupi.usercenter.exception.BusinessException;
 import com.yupi.usercenter.model.domain.Team;
 
 import com.yupi.usercenter.model.domain.User;
+import com.yupi.usercenter.model.domain.UserTeam;
 import com.yupi.usercenter.model.dto.TeamQuery;
+import com.yupi.usercenter.model.request.DeleteRequest;
 import com.yupi.usercenter.model.request.TeamJoinRequest;
 import com.yupi.usercenter.model.request.TeamQuitRequest;
 import com.yupi.usercenter.model.request.TeamUpdateRequest;
 import com.yupi.usercenter.model.vo.TeamUserVO;
 import com.yupi.usercenter.service.TeamService;
 import com.yupi.usercenter.service.UserService;
+import com.yupi.usercenter.service.UserTeamService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
-import org.springframework.http.HttpRequest;
 import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("team")
@@ -33,6 +39,8 @@ public class TeamController {
     private TeamService teamService;
     @Resource
     private UserService userService;
+    @Resource
+    private UserTeamService userTeamService;
 
     @PostMapping("add")
     public BaseResponse<Long> addTeam(@RequestBody Team team, HttpServletRequest request) {
@@ -47,17 +55,7 @@ public class TeamController {
         return ResultUtils.success(team.getId());
     }
 
-    @PostMapping("delete")
-    public BaseResponse<Boolean> deleteTeam(@RequestBody Long teamId) {
-        if (teamId <= 0) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR);
-        }
-        boolean save = teamService.removeById(teamId);
-        if (!save) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "删除队伍失败");
-        }
-        return ResultUtils.success(true);
-    }
+
 
 //    @PostMapping("update")
 //    public BaseResponse<Boolean> deleteTeam(@RequestBody Team team) {
@@ -107,11 +105,86 @@ public class TeamController {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         boolean isAdmin = userService.isAdmin(request);
+
         //传入querywrapper,是条件构造器 构造的时候只需要指定 表名 和查询条件
-        List<TeamUserVO> userList = teamService.listTeams(teamQuery,isAdmin);
+        List<TeamUserVO> teamList = teamService.listTeams(teamQuery,isAdmin);
+        List<Long> teamIdList = teamList.stream().map(TeamUserVO::getId).collect(Collectors.toList());
+
+        QueryWrapper<UserTeam> userTeamQueryWrapper = new QueryWrapper<>();
+
+        try{
+            User loginUser = userService.getLoginUser(request);
+            userTeamQueryWrapper.eq("userId",loginUser.getId());
+            userTeamQueryWrapper.in("teamId",teamIdList);
+            List<UserTeam> userTeamList = userTeamService.list(userTeamQueryWrapper);
+            Set<Long> hasJoinTeamIdSet = userTeamList.stream().map(UserTeam::getTeamId).collect(Collectors.toSet());
+            teamList.forEach(team ->{
+                boolean hasJoin = hasJoinTeamIdSet.contains(team.getId());
+                team.setHasJoin(hasJoin);
+            });
+        }catch (Exception e){
+
+        }
+
+        return ResultUtils.success(teamList);
+    }
+
+    /**
+     * 获取我创建的队伍
+     * @param teamQuery
+     * @param request
+     * @return
+     */
+    @GetMapping("list/my/create")
+    public BaseResponse<List<TeamUserVO>> listMyCreateTeams(TeamQuery teamQuery,HttpServletRequest request) {
+        if (teamQuery == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+        teamQuery.setUserId(loginUser.getId());
+        boolean isAdmin = userService.isAdmin(request);
+        //传入querywrapper,是条件构造器 构造的时候只需要指定 表名 和查询条件
+        List<TeamUserVO> userList = teamService.listTeams(teamQuery,true);
         return ResultUtils.success(userList);
     }
 
+    /**
+     * 获取我加入的队伍
+     * @param teamQuery
+     * @return
+     */
+    @GetMapping("list/my/join")
+    public BaseResponse<List<TeamUserVO>> listMyJoinTeams(TeamQuery teamQuery,HttpServletRequest request) {
+        if (teamQuery == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+        QueryWrapper<UserTeam> queryWrapper = new QueryWrapper();
+        queryWrapper
+                .eq("userId",loginUser.getId());
+
+
+        List<UserTeam> userTeamList = userTeamService.list(queryWrapper);
+        //取出不重复的队伍id
+//      //.collect(Collectors.groupingBy(UserTeam::getTeamId)) -
+//      这是一个终端操作，用于收集流中的元素。Collectors.groupingBy
+//      是一个收集器（Collector），它根据提供的函数（在这个例子中
+//      是 UserTeam::getTeamId，一个方法引用）对流中的元素进行分组
+//      。getTeamId 应该是 UserTeam 类的一个方法，返回某个用于分组
+//      的关键字段（比如团队ID）。
+        //1,2    1,3    2,3
+        //=>     2  3
+        //=>     1   2,3
+        Map<Long,List<UserTeam>> listMap = userTeamList.stream().collect(Collectors.groupingBy(UserTeam::getTeamId));
+        //取键的集合
+        List<Long> isList = new ArrayList<>(listMap.keySet());
+        teamQuery.setIdList(isList);
+
+        //传入querywrapper,是条件构造器 构造的时候只需要指定 表名 和查询条件
+        List<TeamUserVO> userList = teamService.listTeams(teamQuery,true);
+        return ResultUtils.success(userList);
+    }
+//todo 调用分页
     @GetMapping("list/page")
     public BaseResponse<Page<Team>> listPagesTeams(TeamQuery teamQuery) {
         if (teamQuery == null) {
@@ -147,4 +220,27 @@ public class TeamController {
         return ResultUtils.success(result);
     }
 
+    @PostMapping("delete")
+    public BaseResponse<Boolean> deleteTeam(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
+
+        if (deleteRequest==null || deleteRequest.getId()<=0){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        long id = deleteRequest.getId();
+        User loginUser = userService.getLoginUser(request);
+        Boolean result = teamService.deleteTeam(id, loginUser);
+        return ResultUtils.success(result);
+    }
+
+//    @GetMapping("getTeamById")
+//    public Team getTeamById(long teamId) {
+//        if (teamId==0){
+//            throw new BusinessException(ErrorCode.PARAMS_ERROR,"teamId不能为空");
+//        }
+//        QueryWrapper<Team> queryWrapper =new QueryWrapper<>();
+//        queryWrapper.eq("teamId",teamId);
+//        Team team = teamService.getOne(queryWrapper);
+//        return team;
+//
+//    }
 }

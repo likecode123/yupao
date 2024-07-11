@@ -1,14 +1,18 @@
 package com.yupi.usercenter.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.yupi.usercenter.config.common.ErrorCode;
 import com.yupi.usercenter.exception.BusinessException;
 import com.yupi.usercenter.model.domain.User;
+import com.yupi.usercenter.model.vo.UserVO;
 import com.yupi.usercenter.service.UserService;
 import com.yupi.usercenter.mapper.UserMapper;
+import com.yupi.usercenter.utils.AlgorithmUtils;
+import javafx.util.Pair;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
@@ -17,11 +21,11 @@ import org.springframework.util.DigestUtils;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.yupi.usercenter.contant.UserConstant.ADMIN_ROLE;
 import static com.yupi.usercenter.contant.UserConstant.USER_LOGIN_STATE;
@@ -309,10 +313,79 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         }).map(this::getSafetyUser).collect(Collectors.toList());
     }
 
+    /**
+     * 推荐匹配用户
+     * @param num
+     * @param loginUser
+     * @return
+     */
+    @Override
+    public List<User> matchUsers(long num, User loginUser) {
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        queryWrapper.select("id","tags");//我们只查id和tags字段
+        queryWrapper.isNotNull("tags");
+//获取标签不为空的所有用户的列表
+        List<User> userList = this.list(queryWrapper);
+//获取当前登录用户的标签
+        String tags = loginUser.getTags();
+//tags是json格式，现在转为java对象
+        Gson gson = new Gson();
+        List<String> tagList = gson.fromJson(tags,new TypeToken<List<String>>()
+        {}.getType());
+//记录用户的下标和相似度
+        List<Pair<User, Long>> pairList = new ArrayList<>();
+//依次计算所有用户和当前用户的相似度
+        for (int i = 0; i < userList.size(); i++) {
+            User user = userList.get(i);
+//获取列表用户的标签
+            String userTags = user.getTags();
+            if (StringUtils.isBlank(userTags) || user.getId() == loginUser.getId()){//用户没
+                //有标签或者遍历到自己，就遍历下一个用户
+                continue;
+            }
+//将用户的标签转为java对象
+            List<String> userTagList =gson.fromJson(userTags,new TypeToken<List<String>>()
+            {}.getType());
+//两两比较,获取相识度，相识度月底，就越匹配
+            long distance = AlgorithmUtils.minDistance(tagList, userTagList);
+//记录
+            pairList.add(new Pair<>(user,distance));
+        }
+// 按编辑距离由小到大排序,升序，编辑距离越短，匹配度越高，即相识度越高
+        List<Pair<User, Long>> topUserPairList = pairList.stream()
+                .sorted((a, b) -> (int) (a.getValue() - b.getValue()))
+                .limit(num)
+                .collect(Collectors.toList());
+//从topUserPairList取出用户,这里的用户只有id和tags信息,这里已经根据相似度排好序了
+        List<Long> userIdList = topUserPairList.stream().map(pair ->
+                pair.getKey().getId()).collect(Collectors.toList());
+//获取用户的所有信息，并进行脱敏，得到的是未排序的用户
+// 1, 3, 2
+// User1、User2、User3
+// 1 => User1, 2 => User2, 3 => User3
+        QueryWrapper<User> userQueryWrapper = new QueryWrapper<>();
+        userQueryWrapper.in("id",userIdList);//使用in了之后就又打乱了顺序
+        Map<Long, List<User>> userIdUserListMap = this.list(userQueryWrapper).
+                stream().
+                map(user -> getSafetyUser(user)).collect(Collectors.groupingBy(User::getId));
+//重新排序
+        List<User> finalUserList = new ArrayList<>();
+        for (Long userId :userIdList ){
+            finalUserList.add(userIdUserListMap.get(userId).get(0));
+        }
+        return finalUserList;
+    }
+
+
+
+
+
+
+
+
 }
 
 
 
 
 
-// [加入我们](https://yupi.icu) 从 0 到 1 项目实战，经验拉满！10+ 原创项目手把手教程、7 日项目提升训练营、1000+ 项目经验笔记、60+ 编程经验分享直播

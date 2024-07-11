@@ -5,6 +5,7 @@ import com.yupi.usercenter.config.common.BaseResponse;
 import com.yupi.usercenter.model.domain.Team;
 import com.yupi.usercenter.model.domain.User;
 import com.yupi.usercenter.model.dto.TeamQuery;
+import com.yupi.usercenter.model.request.DeleteRequest;
 import com.yupi.usercenter.model.request.TeamJoinRequest;
 import com.yupi.usercenter.model.request.TeamQuitRequest;
 import com.yupi.usercenter.model.request.TeamUpdateRequest;
@@ -34,4 +35,9 @@ public interface TeamService extends IService<Team> {
     Boolean joinTeam(TeamJoinRequest teamJoinRequest, User loginUser);
 
     Boolean quitTeam(TeamQuitRequest teamQuitRequest, User loginUser);
+
+
+
+    @Transactional(rollbackFor = Exception.class)
+    Boolean deleteTeam(long id, User loginUser);
 }

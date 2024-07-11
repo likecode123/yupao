@@ -9,6 +9,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.util.Date;
+import java.util.List;
+
 //生成equals和hashcode方法
 @EqualsAndHashCode
 @Data
@@ -19,6 +21,10 @@ public class TeamQuery extends PageRequest {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    /**
+     * id列表
+     */
+    private List<Long> idList;
     /**
      * 搜索文本
      */

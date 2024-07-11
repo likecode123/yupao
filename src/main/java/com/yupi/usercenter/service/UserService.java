@@ -2,6 +2,7 @@ package com.yupi.usercenter.service;
 
 import com.yupi.usercenter.model.domain.User;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.yupi.usercenter.model.vo.UserVO;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -79,4 +80,6 @@ public interface UserService extends IService<User> {
     int userLogout(HttpServletRequest request);
 
     Object searchUserByTags(List<String> list);
+
+    List<User> matchUsers(long num, User loginUser);
 }
