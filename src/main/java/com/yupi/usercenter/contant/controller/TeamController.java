@@ -123,8 +123,20 @@ public class TeamController {
                 team.setHasJoin(hasJoin);
             });
         }catch (Exception e){
-
         }
+/**
+ * 查询已加入队伍的人数
+ */
+        QueryWrapper<UserTeam> userTeamJoinQueryWrapper = new QueryWrapper<>();
+        userTeamJoinQueryWrapper.in("teamId",teamIdList);
+        List<UserTeam> userTeamList = userTeamService.list(userTeamJoinQueryWrapper);
+//根据teamId进行分组
+        Map<Long, List<UserTeam>> teamIdUserTeamList = userTeamList.stream().
+                collect(Collectors.groupingBy(UserTeam::getTeamId));
+//给hasJoinNum设置值
+        teamList.forEach(team ->
+                team.setHasJoinNum(teamIdUserTeamList.getOrDefault(team.getId(),new
+                        ArrayList<>()).size()));
 
         return ResultUtils.success(teamList);
     }
